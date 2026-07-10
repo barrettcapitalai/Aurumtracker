@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AURUM / NEYRO Tracker</title>
+<style>
+  :root {
+    --bg:#0E0C08; --panel:#171310; --panel2:#1F1913; --line:#2E2620;
+    --gold:#E8B24A; --gold-dim:#8A6C34; --text:#EDE6DA; --dim:#9A8F80;
+    --red:#E06A5A; --green:#7BC98F; --alert-bg:#2A1410;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:'Avenir Next','Segoe UI',system-ui,sans-serif; }
+  .mono { font-family:ui-monospace,'SF Mono',Menlo,monospace; }
+  header { border-bottom:1px solid var(--line); padding:22px 20px 18px; display:flex; flex-wrap:wrap; gap:14px; justify-content:space-between; align-items:baseline; }
+  .eyebrow { font-size:11px; letter-spacing:.25em; color:var(--gold); font-family:ui-monospace,monospace; }
+  h1 { margin:6px 0 0; font-size:24px; font-weight:600; }
+  .totals { display:flex; gap:24px; font-family:ui-monospace,monospace; font-size:13px; }
+  .totals b { color:var(--gold); font-weight:600; }
+  .totals span { color:var(--dim); }
+  main { padding:16px 20px 60px; max-width:1100px; margin:0 auto; }
+  .bar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px; }
+  button { background:var(--gold); color:#1A1408; border:none; border-radius:6px; padding:9px 16px; font-weight:700; font-size:13px; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--gold); border:1px solid var(--gold-dim); font-weight:500; }
+  button:disabled { opacity:.5; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; margin-bottom:14px; overflow:hidden; }
+  .card.alerts { border-color:var(--gold-dim); }
+  .card-h { padding:13px 16px; border-bottom:1px solid var(--line); font-weight:600; font-size:14px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; align-items:center; }
+  .card-h small { color:var(--dim); font-weight:400; font-size:12px; }
+  .row { padding:12px 16px; border-top:1px solid var(--line); display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  .row:first-of-type { border-top:none; }
+  .wname { font-weight:600; font-size:14px; }
+  .waddr { font-size:11px; color:var(--dim); word-break:break-all; margin-top:3px; }
+  .tag { font-size:10px; font-family:ui-monospace,monospace; color:var(--gold); border:1px solid var(--gold-dim); border-radius:20px; padding:2px 8px; margin-left:6px; }
+  .tag.contract { color:var(--red); border-color:rgba(224,106,90,.4); }
+  .bal { margin-left:auto; text-align:right; font-family:ui-monospace,monospace; font-size:13px; }
+  .bal .u { color:var(--gold); }
+  .bal small { color:var(--dim); font-size:11px; }
+  .actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .actions a, .actions button.mini { font-size:12px; padding:6px 10px; border-radius:6px; border:1px solid var(--line); color:var(--dim); background:transparent; text-decoration:none; font-weight:500; cursor:pointer; }
+  .actions button.mini.gold { color:var(--gold); border-color:var(--gold-dim); }
+  .alert-row { font-size:13px; }
+  .alert-tag { font-family:ui-monospace,monospace; font-size:10px; font-weight:700; border-radius:20px; padding:2px 8px; white-space:nowrap; }
+  .t-EXCHANGE, .t-BALANCEDROP { color:var(--red); border:1px solid rgba(224,106,90,.4); }
+  .t-LARGEOUT { color:var(--gold); border:1px solid var(--gold-dim); }
+  .t-INTERNAL { color:var(--green); border:1px solid rgba(123,201,143,.4); }
+  .time { color:var(--dim); font-family:ui-monospace,monospace; font-size:11px; }
+  .tx-row { font-family:ui-monospace,monospace; font-size:12.5px; }
+  .tx-row.exch { background:var(--alert-bg); }
+  .tx-row.internal { background:#241C0E; }
+  .out { color:var(--red); font-weight:700; } .in { color:var(--green); font-weight:700; }
+  .empty { padding:16px; color:var(--dim); font-size:13px; }
+  .note { font-size:12px; color:var(--dim); line-height:1.6; margin-top:10px; }
+  .err { color:var(--red); }
+  @media (max-width:640px){ .bal { margin-left:0; text-align:left; width:100%; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="eyebrow">ON-CHAIN LEDGER · BNB CHAIN · 24/7 MONITOR</div>
+    <h1>AURUM / NEYRO Wallet Tracker</h1>
+  </div>
+  <div class="totals">
+    <div><span>Live USDT </span><b id="tot-usdt">…</b></div>
+    <div><span>Live BNB </span><b id="tot-bnb">…</b></div>
+  </div>
+</header>
+<main>
+  <div class="bar">
+    <button id="refresh">↻ Refresh balances</button>
+    <button class="ghost" id="tg-test">Send Telegram test</button>
+    <span class="time" id="updated"></span>
+  </div>
+
+  <div class="card alerts">
+    <div class="card-h">⚠ Alert feed <small>written by the 15-minute background monitor — same alerts go to Telegram</small></div>
+    <div id="alerts"><div class="empty">Loading…</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">Watchlist</div>
+    <div id="wallets"><div class="empty">Loading…</div></div>
+  </div>
+
+  <div class="card" id="detail" style="display:none">
+    <div class="card-h"><span id="detail-title"></span><small>gold = watched↔watched · red = exchange</small></div>
+    <div id="detail-body"></div>
+  </div>
+
+  <div class="note">
+    Balances read live from public BNB Chain nodes. The background monitor runs every 15 minutes on the server —
+    it flags exchange transfers, outflows above your threshold, internal shuffles between project wallets, and balance
+    drops, then pushes them to Telegram. Contract addresses (USDT peg, AURUM LP) are display-only and excluded
+    from scanning. Nansen-labeled data, where shown, is provided by Nansen.
+  </div>
+</main>
+
+<script>
+let CONFIG = { wallets: [], exchanges: [] };
+const $ = (id) => document.getElementById(id);
+const short = (a) => a ? a.slice(0,6)+"…"+a.slice(-4) : "";
+const lc = (a) => String(a||"").toLowerCase();
+const nameOf = (a) =>
+  CONFIG.wallets.find(w=>lc(w.address)===lc(a))?.name ||
+  CONFIG.exchanges.find(e=>lc(e.address)===lc(a))?.name || short(a);
+const isEx = (a) => CONFIG.exchanges.some(e=>lc(e.address)===lc(a));
+const isWatched = (a) => CONFIG.wallets.some(w=>lc(w.address)===lc(a));
+const esc = (s) => String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+async function loadConfig(){
+  CONFIG = await fetch("/api/alerts?config=1").then(r=>r.json());
+  renderWallets({});
+}
+
+function renderWallets(bals){
+  let totU=0, totB=0;
+  $("wallets").innerHTML = CONFIG.wallets.map(w=>{
+    const b = bals[w.address];
+    if(b && !b.error){ totU+=b.usdt; totB+=b.bnb; }
+    return `<div class="row">
+      <div style="flex:2 1 220px;min-width:0">
+        <div class="wname">${esc(w.name)}
+          ${w.label?`<span class="tag ${w.isContract?'contract':''}">${esc(w.label)}</span>`:""}
+          ${w.isContract?`<span class="tag contract">CONTRACT</span>`:""}
+        </div>
+        <div class="waddr mono">${w.address}</div>
+      </div>
+      <div class="bal">
+        ${b ? (b.error ? '<span class="err">rpc error</span>' :
+          `<div class="u">${b.usdt.toLocaleString(undefined,{maximumFractionDigits:2})} <small>USDT</small></div>
+           <div>${b.bnb.toLocaleString(undefined,{maximumFractionDigits:4})} <small>BNB</small></div>`) : "…"}
+      </div>
+      <div class="actions">
+        <button class="mini gold" onclick="loadTxs('${w.address}')">Txs</button>
+        <button class="mini gold" onclick="loadCps('${w.address}')">Counterparties</button>
+        <a href="https://bscscan.com/address/${w.address}" target="_blank">BscScan ↗</a>
+      </div>
+    </div>`;
+  }).join("");
+  $("tot-usdt").textContent = totU.toLocaleString(undefined,{maximumFractionDigits:0});
+  $("tot-bnb").textContent = totB.toLocaleString(undefined,{maximumFractionDigits:3});
+}
+
+async function refresh(){
+  $("refresh").disabled = true;
+  try {
+    const bals = await fetch("/api/balances").then(r=>r.json());
+    renderWallets(bals);
+    $("updated").textContent = "updated " + new Date().toLocaleTimeString();
+  } catch(e){ $("updated").textContent = "refresh failed"; }
+  $("refresh").disabled = false;
+}
+
+async function loadAlerts(){
+  try {
+    const alerts = await fetch("/api/alerts").then(r=>r.json());
+    $("alerts").innerHTML = alerts.length ? alerts.slice(0,30).map(a=>`
+      <div class="row alert-row">
+        <span class="alert-tag t-${String(a.type).replace(/\s/g,'')}">${esc(a.type)}</span>
+        <span class="time">${new Date(a.time).toLocaleString()}</span>
+        <span style="flex:1">${esc(a.text)}</span>
+        ${a.hash?`<a class="mono" style="color:var(--gold)" href="https://bscscan.com/tx/${a.hash}" target="_blank">tx ↗</a>`:""}
+      </div>`).join("")
+      : '<div class="empty">No alerts yet. The monitor runs every 15 minutes; anything it flags appears here and in Telegram.</div>';
+  } catch(e){ $("alerts").innerHTML = '<div class="empty err">Could not load alerts.</div>'; }
+}
+
+async function loadTxs(address){
+  showDetail("Recent activity — " + nameOf(address), '<div class="empty">loading…</div>');
+  try {
+    const txs = await fetch("/api/txs?address="+address).then(r=>r.json());
+    if(txs.error) return showDetail("Recent activity — "+nameOf(address), `<div class="empty err">${esc(txs.error)}</div>`);
+    $("detail-body").innerHTML = txs.map(t=>{
+      const internal = isWatched(t.from)&&isWatched(t.to);
+      const exch = isEx(t.from)||isEx(t.to);
+      const out = lc(t.from)===lc(address);
+      return `<div class="row tx-row ${exch?'exch':internal?'internal':''}">
+        <span class="time">${new Date(t.time).toLocaleString()}</span>
+        <span class="${out?'out':'in'}">${out?'OUT':'IN'}</span>
+        <span style="color:${exch?'var(--red)':internal?'var(--gold)':'inherit'}">${esc(nameOf(t.from))} → ${esc(nameOf(t.to))}</span>
+        <span style="margin-left:auto">${t.value.toLocaleString(undefined,{maximumFractionDigits:4})} ${esc(t.symbol)}</span>
+        <a href="https://bscscan.com/tx/${t.hash}" target="_blank" style="color:var(--dim);text-decoration:none">↗</a>
+      </div>`;
+    }).join("") || '<div class="empty">No transactions.</div>';
+  } catch(e){ $("detail-body").innerHTML = `<div class="empty err">${esc(e.message)}</div>`; }
+}
+
+async function loadCps(address){
+  showDetail("Nansen counterparties (90d) — " + nameOf(address), '<div class="empty">querying Nansen…</div>');
+  const to = new Date(), from = new Date(Date.now()-90*24*3600e3);
+  try {
+    const res = await fetch("/api/nansen", { method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ path:"/profiler/address/counterparties",
+        body:{ address, chain:"bnb", date:{ from:from.toISOString(), to:to.toISOString() }, pagination:{ page:1, records_per_page:25 } } })
+    }).then(r=>r.json());
+    if(res.error || res.status>=400) return $("detail-body").innerHTML = `<div class="empty err">Nansen: ${esc(res.error||JSON.stringify(res.data).slice(0,200))}</div>`;
+    const rows = extractRows(res.data);
+    const exRe = /binance|okx|bybit|kucoin|gate|mexc|htx|huobi|kraken|coinbase|bitget|exchange|hot wallet/i;
+    $("detail-body").innerHTML = rows.length ? rows.map(r=>{
+      const label = r.counterparty_label||r.label||r.entity_name||r.name||r.counterparty_name||"";
+      const addr = r.counterparty_address||r.address||r.wallet_address||"";
+      const vin = r.volume_in_usd??r.inflow_usd, vout = r.volume_out_usd??r.outflow_usd??r.volume_usd;
+      const exch = label && exRe.test(label);
+      return `<div class="row tx-row ${exch?'exch':''}">
+        <span style="color:${exch?'var(--red)':'var(--gold)'};font-weight:600;min-width:150px">${esc(label||short(addr))}</span>
+        <span class="time">${short(addr)}</span>
+        <span style="margin-left:auto;display:flex;gap:14px">
+          <span><span class="in">in</span> ${fmtUsd(vin)}</span>
+          <span><span class="out">out</span> ${fmtUsd(vout)}</span>
+        </span>
+        ${addr?`<a href="https://bscscan.com/address/${addr}" target="_blank" style="color:var(--dim);text-decoration:none">↗</a>`:""}
+      </div>`;
+    }).join("") : '<div class="empty">Nansen returned no counterparties. Check your NANSEN_KEY env var and credit balance.</div>';
+  } catch(e){ $("detail-body").innerHTML = `<div class="empty err">${esc(e.message)}</div>`; }
+}
+
+function extractRows(resp){
+  if(Array.isArray(resp)) return resp;
+  if(!resp||typeof resp!=="object") return [];
+  for(const k of ["data","result","results","counterparties","items","records"]){
+    if(Array.isArray(resp[k])) return resp[k];
+    if(resp[k]&&typeof resp[k]==="object"){ const inner=extractRows(resp[k]); if(inner.length) return inner; }
+  }
+  for(const v of Object.values(resp)) if(Array.isArray(v)&&v.length&&typeof v[0]==="object") return v;
+  return [];
+}
+const fmtUsd = (v)=> (v===undefined||v===null||isNaN(Number(v)))?"—":"$"+Number(v).toLocaleString(undefined,{maximumFractionDigits:0});
+
+function showDetail(title, body){
+  $("detail").style.display = "block";
+  $("detail-title").textContent = title;
+  $("detail-body").innerHTML = body;
+  $("detail").scrollIntoView({behavior:"smooth"});
+}
+
+$("refresh").onclick = refresh;
+$("tg-test").onclick = async ()=>{
+  $("tg-test").disabled = true;
+  const r = await fetch("/api/alerts?test=telegram").then(r=>r.json());
+  alert(r.ok ? "Sent! Check your Telegram." : "Failed: " + (r.error || r.description || "check env vars"));
+  $("tg-test").disabled = false;
+};
+
+loadConfig().then(()=>{ refresh(); loadAlerts(); setInterval(loadAlerts, 60000); });
+</script>
+</body>
+</html>
